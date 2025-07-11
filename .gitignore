@@ -205,3 +205,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+models/ 
+# Models directory is used to store various model files, including LLM and TTS handlers.
