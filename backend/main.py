@@ -3,12 +3,17 @@ FastAPI backend for SpeakStream - Real-time streaming chatbot
 """
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 import uvicorn
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 from models.llm_handler import LLMHandler
 from models.tts_handler import TTSHandler
@@ -86,6 +91,28 @@ async def health_check():
         "tts_loaded": tts_handler is not None
     }
 
+# Configuration endpoint for frontend
+@app.get("/config")
+async def get_config():
+    """Get frontend configuration from environment variables"""
+    # Build WebSocket URL from environment
+    ws_protocol = os.getenv("WS_PROTOCOL", "ws")
+    ws_host = os.getenv("WS_HOST", "localhost")
+    ws_port = os.getenv("WS_PORT", os.getenv("PORT", "8000"))
+    ws_url = f"{ws_protocol}://{ws_host}:{ws_port}/ws"
+    
+    return {
+        "websocket_url": ws_url,
+        "default_volume": float(os.getenv("DEFAULT_VOLUME", "0.8")),
+        "auto_scroll": os.getenv("AUTO_SCROLL", "true").lower() == "true",
+        "save_chat_history": os.getenv("SAVE_CHAT_HISTORY", "true").lower() == "true",
+        "max_chat_history": int(os.getenv("MAX_CHAT_HISTORY", "100")),
+        "chunk_size": int(os.getenv("CHUNK_SIZE", "1024")),
+        "max_queue_size": int(os.getenv("MAX_QUEUE_SIZE", "10")),
+        "enable_audio": os.getenv("ENABLE_AUDIO", "true").lower() == "true",
+        "audio_buffer_size": int(os.getenv("AUDIO_BUFFER_SIZE", "8192"))
+    }
+
 # Serve static files
 frontend_path = Path(__file__).parent.parent / "frontend"
 if frontend_path.exists():
@@ -113,10 +140,14 @@ async def get_frontend():
     return {"message": "SpeakStream API is running! Frontend not found."}
 
 if __name__ == "__main__":
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+    debug = os.getenv("DEBUG", "true").lower() == "true"
+    
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
+        host=host,
+        port=port,
+        reload=debug,
         log_level="info"
     )

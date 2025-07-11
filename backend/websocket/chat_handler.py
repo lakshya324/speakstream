@@ -62,7 +62,7 @@ class ChatHandler:
             # Stream responses to client
             response_chunks = []
             async for chunk in audio_stream:
-                # Send chunk to client
+                # Send chunk to client in the expected format
                 await self._send_message(websocket, {
                     "type": "chunk",
                     "data": chunk
