@@ -77,30 +77,65 @@
     </div>
 
     <!-- Scripts -->
+    <script src="js/config.js"></script>
     <script src="js/audio-player.js"></script>
     <script src="js/websocket.js"></script>
     <script src="js/ui-fixed.js"></script>
     
     <script>
         // Initialize the application
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 SpeakStream frontend initialized');
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🚀 SpeakStream frontend starting...');
             
-            // Initialize components
-            const audioPlayer = new AudioPlayer();
-            const wsClient = new WebSocketClient(audioPlayer);
-            const ui = new UIController(wsClient, audioPlayer);
+            try {
+                // Load configuration first
+                await window.appConfig.loadConfig();
+                
+                // Initialize components with loaded config
+                const audioPlayer = new AudioPlayer();
+                const wsClient = new WebSocketClient(audioPlayer);
+                const ui = new UIController(wsClient, audioPlayer);
+                
+                // Set initial volume from config
+                const defaultVolume = window.appConfig.getDefaultVolume();
+                audioPlayer.setVolume(defaultVolume);
+                
+                // Update volume slider to match config
+                const volumeSlider = document.getElementById('volume-slider');
+                const volumeDisplay = document.getElementById('volume-display');
+                if (volumeSlider && volumeDisplay) {
+                    volumeSlider.value = Math.round(defaultVolume * 100);
+                    volumeDisplay.textContent = `${Math.round(defaultVolume * 100)}%`;
+                }
+                
+                console.log('✅ SpeakStream frontend initialized successfully');
+                
+            } catch (error) {
+                console.error('❌ Failed to initialize SpeakStream:', error);
+                // Show error to user
+                const chatMessages = document.getElementById('chat-messages');
+                if (chatMessages) {
+                    chatMessages.innerHTML += `
+                        <div class="error-message">
+                            ❌ Failed to initialize application: ${error.message}
+                        </div>
+                    `;
+                }
+            }
             
             // Set up global error handling
             window.addEventListener('error', function(e) {
                 console.error('Global error:', e.error);
-                ui.showError(`Unexpected error: ${e.error.message}`);
+                // Only show error if UI is initialized
+                if (window.ui && window.ui.showError) {
+                    window.ui.showError(`Unexpected error: ${e.error.message}`);
+                }
             });
             
             // Set up beforeunload warning
             window.addEventListener('beforeunload', function() {
-                if (wsClient.isConnected()) {
-                    wsClient.disconnect();
+                if (window.wsClient && window.wsClient.isConnected()) {
+                    window.wsClient.disconnect();
                 }
             });
         });

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Debug Test</title>
+</head>
+<body>
+    <h1>Audio Debug Test</h1>
+    <button id="testAudio">Test Audio Context</button>
+    <button id="connectWS">Connect WebSocket</button>
+    <button id="sendMessage">Send Test Message</button>
+    <div id="log" style="max-height: 400px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin: 10px 0;"></div>
+
+    <script>
+        let ws = null;
+        let audioContext = null;
+        const log = document.getElementById('log');
+        
+        function logMessage(msg) {
+            const time = new Date().toLocaleTimeString();
+            log.innerHTML += `<div>${time}: ${msg}</div>`;
+            log.scrollTop = log.scrollHeight;
+            console.log(msg);
+        }
+
+        // Simple audio context test
+        document.getElementById('testAudio').onclick = async function() {
+            try {
+                logMessage('🔧 Testing Web Audio API...');
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                logMessage(`📊 Audio context state: ${audioContext.state}`);
+                
+                await audioContext.resume();
+                logMessage(`📊 Audio context resumed: ${audioContext.state}`);
+                
+                // Create a simple beep
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 440;
+                gainNode.gain.value = 0.1;
+                
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.5);
+                
+                logMessage('✅ Web Audio API working - you should hear a beep!');
+            } catch (error) {
+                logMessage('❌ Web Audio API error: ' + error.message);
+            }
+        };
+
+        // WebSocket test
+        document.getElementById('connectWS').onclick = function() {
+            try {
+                logMessage('🔌 Connecting to WebSocket...');
+                ws = new WebSocket('ws://localhost:8000/ws');
+                
+                ws.onopen = function() {
+                    logMessage('✅ WebSocket connected');
+                };
+                
+                ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    logMessage(`📨 Received: ${data.type}`);
+                    
+                    if (data.type === 'chunk' && data.data && data.data.type === 'audio') {
+                        logMessage(`🔊 Got audio chunk: ${data.data.chunk_id} (${data.data.data.length} bytes)`);
+                        testAudioPlayback(data.data.data, data.data.chunk_id);
+                    }
+                };
+                
+                ws.onerror = function(error) {
+                    logMessage('❌ WebSocket error: ' + error);
+                };
+                
+                ws.onclose = function() {
+                    logMessage('🔌 WebSocket closed');
+                };
+                
+            } catch (error) {
+                logMessage('❌ WebSocket connection error: ' + error.message);
+            }
+        };
+
+        // Send test message
+        document.getElementById('sendMessage').onclick = function() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const message = JSON.stringify({
+                    type: "chat",
+                    message: "Hello audio test!"
+                });
+                ws.send(message);
+                logMessage('📤 Sent test message');
+            } else {
+                logMessage('❌ WebSocket not connected');
+            }
+        };
+
+        async function testAudioPlayback(base64Audio, chunkId) {
+            try {
+                logMessage(`🎵 Testing audio chunk ${chunkId}...`);
+                
+                if (!audioContext) {
+                    logMessage('⚠️ Audio context not initialized - click "Test Audio Context" first');
+                    return;
+                }
+                
+                // Convert base64 to ArrayBuffer
+                const binaryString = atob(base64Audio);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                
+                logMessage(`📊 Audio data: ${bytes.length} bytes`);
+                
+                // Decode audio
+                const audioBuffer = await audioContext.decodeAudioData(bytes.buffer);
+                logMessage(`🎼 Audio decoded: ${audioBuffer.duration.toFixed(2)}s, ${audioBuffer.numberOfChannels} channels, ${audioBuffer.sampleRate}Hz`);
+                
+                // Play the audio
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+                source.start();
+                
+                logMessage(`✅ Audio chunk ${chunkId} played successfully!`);
+                
+            } catch (error) {
+                logMessage(`❌ Audio playback error for chunk ${chunkId}: ${error.message}`);
+                console.error('Full error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

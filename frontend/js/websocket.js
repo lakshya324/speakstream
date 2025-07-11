@@ -74,8 +74,14 @@ class WebSocketClient {
         
         return new Promise((resolve, reject) => {
             try {
-                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const wsUrl = `${protocol}//${window.location.host}/ws`;
+                // Get WebSocket URL from config or fallback to current host
+                let wsUrl;
+                if (window.appConfig) {
+                    wsUrl = window.appConfig.getWebSocketUrl();
+                } else {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    wsUrl = `${protocol}//${window.location.host}/ws`;
+                }
                 
                 console.log(`🔌 Connecting to ${wsUrl}`);
                 this.ws = new WebSocket(wsUrl);
@@ -160,6 +166,7 @@ class WebSocketClient {
     handleChunk(chunkData) {
         if (!chunkData) return;
         
+        console.log('📦 Handling chunk:', chunkData);
         const chunkType = chunkData.type;
         
         if (chunkType === 'text') {
@@ -169,6 +176,7 @@ class WebSocketClient {
             
         } else if (chunkType === 'audio') {
             // Handle audio chunk
+            console.log('🔊 Processing audio chunk:', chunkData.chunk_id);
             this.currentResponse.audioChunks.push(chunkData);
             this.audioPlayer.playAudioChunk(chunkData.data, chunkData.chunk_id);
             this.emit('audioChunk', chunkData);
@@ -176,6 +184,8 @@ class WebSocketClient {
         } else if (chunkType === 'error') {
             console.error('❌ Server error:', chunkData.data);
             this.emit('serverError', chunkData);
+        } else {
+            console.warn('⚠️ Unknown chunk type:', chunkType);
         }
     }
     

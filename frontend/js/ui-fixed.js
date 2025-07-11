@@ -7,6 +7,10 @@ class UIController {
         this.audioPlayer = audioPlayer;
         this.currentBotMessage = null;
         this.messageCount = 0;
+        this.chatHistory = [];
+        
+        // Initialize config-dependent properties
+        this.initializeFromConfig();
         
         // Get DOM elements
         this.elements = {
@@ -26,7 +30,23 @@ class UIController {
         
         this.setupEventListeners();
         this.setupWebSocketEvents();
+        this.loadChatHistory();
         this.updateUI();
+    }
+
+    initializeFromConfig() {
+        // Set default values from config or fallbacks
+        this.maxHistorySize = window.appConfig ? 
+            window.appConfig.getMaxChatHistory() : 
+            parseInt(localStorage.getItem('maxChatHistory') || '100');
+        
+        this.autoScroll = window.appConfig ? 
+            window.appConfig.shouldAutoScroll() : 
+            localStorage.getItem('autoScroll') !== 'false';
+        
+        this.shouldSaveChatHistory = window.appConfig ? 
+            window.appConfig.shouldSaveChatHistory() : 
+            localStorage.getItem('saveChatHistory') !== 'false';
     }
     
     setupEventListeners() {
@@ -52,6 +72,11 @@ class UIController {
             }
         });
         
+        // Update send button state when input changes
+        this.elements.messageInput.addEventListener('input', () => {
+            this.updateUI();
+        });
+        
         // Clear chat
         this.elements.clearButton.addEventListener('click', () => {
             this.clearChat();
@@ -73,11 +98,13 @@ class UIController {
         // Audio state changes
         window.addEventListener('audioStateChanged', (e) => {
             this.updateAudioInfo(e.detail);
+            this.updateAudioIndicators(e.detail);
         });
         
         // Initialize audio on first user interaction
-        document.addEventListener('click', () => {
-            this.audioPlayer.forceInitialize();
+        document.addEventListener('click', async () => {
+            console.log('👆 User clicked - initializing audio...');
+            await this.audioPlayer.forceInitialize();
         }, { once: true });
         
         // Update debug info periodically
@@ -89,11 +116,13 @@ class UIController {
     setupWebSocketEvents() {
         // Handle text chunks
         this.wsClient.on('textChunk', (chunkData) => {
+            console.log('📝 UI received text chunk:', chunkData);
             this.appendTextToCurrentBotMessage(chunkData.data);
         });
         
         // Handle audio chunks
         this.wsClient.on('audioChunk', (chunkData) => {
+            console.log('🔊 UI received audio chunk:', chunkData);
             this.showAudioIndicator(chunkData);
         });
         
@@ -128,6 +157,9 @@ class UIController {
         try {
             this.elements.connectButton.textContent = 'Connecting...';
             this.elements.connectButton.disabled = true;
+            
+            // Ensure audio is initialized before connecting
+            await this.audioPlayer.forceInitialize();
             
             await this.wsClient.connect();
             
@@ -166,6 +198,9 @@ class UIController {
         this.elements.chatMessages.appendChild(messageDiv);
         this.scrollToBottom();
         this.messageCount++;
+        
+        // Add to chat history
+        this.addToHistory('user', text);
     }
     
     createNewBotMessage() {
@@ -189,6 +224,13 @@ class UIController {
     finalizeBotMessage() {
         if (this.currentBotMessage) {
             this.currentBotMessage.classList.remove('streaming-message');
+            
+            // Add final bot message to history
+            const textElement = this.currentBotMessage.querySelector('.message-text');
+            if (textElement) {
+                this.addToHistory('bot', textElement.textContent);
+            }
+            
             this.currentBotMessage = null;
             this.messageCount++;
         }
@@ -243,6 +285,7 @@ class UIController {
         this.elements.chatMessages.innerHTML = '';
         this.currentBotMessage = null;
         this.messageCount = 0;
+        this.clearChatHistory();
         this.audioPlayer.stopAllAudio();
         this.showSuccess('Chat cleared');
     }
@@ -273,6 +316,7 @@ class UIController {
     
     updateUI() {
         const connected = this.wsClient.isConnected();
+        const hasMessage = this.elements.messageInput.value.trim().length > 0;
         
         // Update connect button
         this.elements.connectButton.textContent = connected ? 'Disconnect' : 'Connect';
@@ -281,7 +325,7 @@ class UIController {
         
         // Update input and send button
         this.elements.messageInput.disabled = !connected;
-        this.elements.sendButton.disabled = !connected || !this.elements.messageInput.value.trim();
+        this.elements.sendButton.disabled = !connected || !hasMessage;
         
         // Update placeholder
         this.elements.messageInput.placeholder = connected ? 
@@ -293,6 +337,21 @@ class UIController {
         if (this.elements.audioQueueInfo) {
             this.elements.audioQueueInfo.textContent = `Audio Queue: ${audioState.queueLength} chunks`;
         }
+    }
+    
+    updateAudioIndicators(audioState) {
+        // Update audio indicators based on current audio state
+        const audioIndicators = document.querySelectorAll('.audio-indicator');
+        audioIndicators.forEach(indicator => {
+            if (audioState.isPlaying && audioState.queueLength > 0) {
+                indicator.className = 'audio-indicator playing';
+                indicator.innerHTML = '🔊 <span class="audio-wave"><span></span><span></span><span></span></span> Playing audio...';
+            } else {
+                // Audio has finished playing
+                indicator.className = 'audio-indicator';
+                indicator.innerHTML = '🔊 Audio complete';
+            }
+        });
     }
     
     updateDebugInfo() {
@@ -332,6 +391,79 @@ class UIController {
     }
     
     scrollToBottom() {
-        this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+        if (this.autoScroll) {
+            this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+        }
+    }
+
+    // Chat History Management
+    addToHistory(type, text) {
+        const historyItem = {
+            type: type,
+            text: text,
+            timestamp: Date.now()
+        };
+        
+        this.chatHistory.push(historyItem);
+        
+        // Keep history within limits
+        if (this.chatHistory.length > this.maxHistorySize) {
+            this.chatHistory = this.chatHistory.slice(-this.maxHistorySize);
+        }
+        
+        // Save to localStorage if enabled
+        if (this.shouldSaveChatHistory) {
+            this.saveChatHistory();
+        }
+    }
+
+    loadChatHistory() {
+        try {
+            const saved = localStorage.getItem('speakstream_chat_history');
+            if (saved) {
+                this.chatHistory = JSON.parse(saved);
+                this.restoreChatFromHistory();
+            }
+        } catch (error) {
+            console.warn('Failed to load chat history:', error);
+            this.chatHistory = [];
+        }
+    }
+
+    saveChatHistory() {
+        try {
+            localStorage.setItem('speakstream_chat_history', JSON.stringify(this.chatHistory));
+        } catch (error) {
+            console.warn('Failed to save chat history:', error);
+        }
+    }
+
+    restoreChatFromHistory() {
+        // Clear current chat
+        this.elements.chatMessages.innerHTML = '';
+        
+        // Restore messages from history
+        this.chatHistory.forEach(item => {
+            if (item.type === 'user') {
+                const messageDiv = this.createMessageElement('user', item.text);
+                this.elements.chatMessages.appendChild(messageDiv);
+            } else if (item.type === 'bot') {
+                const messageDiv = this.createMessageElement('bot', item.text);
+                // Remove audio indicator for historical messages
+                const audioIndicator = messageDiv.querySelector('.audio-indicator');
+                if (audioIndicator) {
+                    audioIndicator.remove();
+                }
+                this.elements.chatMessages.appendChild(messageDiv);
+            }
+        });
+        
+        this.messageCount = this.chatHistory.length;
+        this.scrollToBottom();
+    }
+
+    clearChatHistory() {
+        this.chatHistory = [];
+        localStorage.removeItem('speakstream_chat_history');
     }
 }
