@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpeakStream Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+        #messages { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>SpeakStream Debug Tool</h1>
+    
+    <div id="status" class="status info">Disconnected</div>
+    
+    <button onclick="testConnection()">Test WebSocket Connection</button>
+    <button onclick="sendTestMessage()">Send Test Message</button>
+    <button onclick="clearMessages()">Clear Messages</button>
+    
+    <h3>Messages:</h3>
+    <div id="messages"></div>
+
+    <script>
+        let ws = null;
+        const status = document.getElementById('status');
+        const messages = document.getElementById('messages');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            messages.innerHTML += `<div class="${type}">[${timestamp}] ${message}</div>`;
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function updateStatus(message, type) {
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        function testConnection() {
+            if (ws) {
+                ws.close();
+            }
+
+            const wsUrl = `ws://localhost:8000/ws`;
+            log(`Connecting to ${wsUrl}...`);
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function(event) {
+                updateStatus('Connected to WebSocket', 'success');
+                log('✅ WebSocket connected successfully', 'success');
+            };
+            
+            ws.onmessage = function(event) {
+                log(`📨 Received: ${event.data}`, 'info');
+                try {
+                    const data = JSON.parse(event.data);
+                    log(`📨 Parsed message type: ${data.type}`, 'info');
+                } catch (e) {
+                    log(`❌ Failed to parse JSON: ${e.message}`, 'error');
+                }
+            };
+            
+            ws.onclose = function(event) {
+                updateStatus('Disconnected', 'error');
+                log(`❌ WebSocket closed: Code ${event.code}, Reason: ${event.reason}`, 'error');
+            };
+            
+            ws.onerror = function(error) {
+                updateStatus('Connection Error', 'error');
+                log(`❌ WebSocket error: ${error}`, 'error');
+            };
+        }
+
+        function sendTestMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('❌ WebSocket not connected', 'error');
+                return;
+            }
+
+            const testMessage = {
+                type: 'chat',
+                message: 'Hello, this is a test message!'
+            };
+
+            ws.send(JSON.stringify(testMessage));
+            log(`📤 Sent: ${JSON.stringify(testMessage)}`, 'info');
+        }
+
+        function clearMessages() {
+            messages.innerHTML = '';
+        }
+
+        // Auto-connect on page load
+        window.onload = function() {
+            log('Debug tool loaded. Click "Test WebSocket Connection" to start.', 'info');
+        };
+    </script>
+</body>
+</html>
