@@ -9,6 +9,16 @@ SpeakStream is a real-time streaming chatbot that generates both text and audio 
 - **FastAPI + WebSocket** for real-time communication
 - **Web Audio API** for low-latency audio playback
 
+## ✨ Version 1.1.0 - Stable Release
+
+### Production Ready (All Issues Resolved)
+
+- ✅ **Fully functional UI** - Send button, audio indicators, and chat persistence all working
+- ✅ **Robust audio system** - Streaming audio with comprehensive error handling
+- ✅ **Complete configuration** - All settings configurable via `.env` file
+- ✅ **Production debugging** - Audio diagnostics and WebSocket testing tools
+- ✅ **Session persistence** - Chat history saved and restored automatically
+
 ## 🚀 Quick Start (5 minutes)
 
 ### 1. Install Dependencies
@@ -22,14 +32,47 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Test Setup (Optional)
+### 2. Configure Settings (Optional)
+
+Edit the `.env` file to customize your setup:
+
+```bash
+# Server Settings
+HOST=0.0.0.0
+PORT=8000
+DEBUG=true
+
+# Model Settings
+LLM_MODEL_NAME=HuggingFaceTB/SmolLM2-135M-Instruct
+TTS_MODEL_NAME=tts_models/en/ljspeech/glow-tts
+TTS_SAMPLE_RATE=22050
+
+# Audio Settings
+DEFAULT_VOLUME=0.8
+ENABLE_AUDIO=true
+
+# UI Settings
+AUTO_SCROLL=true
+SAVE_CHAT_HISTORY=true
+MAX_CHAT_HISTORY=100
+
+# Generation Settings
+MAX_NEW_TOKENS=512
+TEMPERATURE=0.7
+TOP_P=0.9
+```
+
+### 3. Test Setup (Optional)
 
 ```bash
 # Run component tests
 python demo.py
+
+# Test WebSocket connection
+python test_websocket.py
 ```
 
-### 3. Start the Server
+### 4. Start the Server
 
 ```bash
 # Method 1: Direct
@@ -43,48 +86,55 @@ chmod +x start.sh
 # Press Ctrl/Cmd+Shift+P, type "Tasks: Run Task", select "Start SpeakStream Server"
 ```
 
-### 4. Open the Frontend
+### 5. Open the Frontend
 
-- **Automatic**: Visit http://localhost:8000 in your browser
+- **Automatic**: Visit <http://localhost:8000> in your browser
 - **Manual**: Open `frontend/index.html` directly
 
-### 5. Start Chatting!
+### 6. Start Chatting
 
 1. Click "Connect" to establish WebSocket connection
 2. Type a message and press Enter or click "Send"
 3. Watch as the AI generates text in real-time
 4. Listen to the voice synthesis as it speaks the response
 
+**💡 Tip**: Click anywhere on the page first to enable audio - browsers require user interaction for audio playback!
+
 ## 📁 Project Structure
 
-```
+```text
 speakstream/
 ├── 📄 README.md              # Main documentation
+├── 📄 QUICKSTART.md          # This file
+├── 📄 TECHNICAL_DOCS.md      # Detailed technical docs
 ├── 📄 requirements.txt       # Python dependencies
+├── 📄 .env                   # Configuration file
 ├── 📄 demo.py                # Test script
+├── 📄 test_websocket.py      # WebSocket test
 ├── 📄 setup_dev.py           # Development setup
 ├── 📄 start.sh               # Startup script
-├── 📄 TECHNICAL_DOCS.md      # Detailed technical docs
 ├── 
 ├── 🗂️ backend/               # FastAPI server
-│   ├── 🐍 main.py            # Main application
+│   ├── 🐍 main.py            # Main application with config endpoint
 │   ├── 🗂️ models/
-│   │   ├── 🐍 llm_handler.py # SmolLM2 integration
-│   │   └── 🐍 tts_handler.py # Coqui TTS integration
+│   │   ├── 🐍 llm_handler.py # SmolLM2 integration (.env configured)
+│   │   └── 🐍 tts_handler.py # Coqui TTS integration (.env configured)
 │   ├── 🗂️ utils/
 │   │   ├── 🐍 text_chunker.py # Text processing
 │   │   └── 🐍 audio_utils.py # Audio utilities
 │   └── 🗂️ websocket/
-│       └── 🐍 chat_handler.py # WebSocket management
+│       └── 🐍 chat_handler.py # WebSocket management (fixed streaming)
 ├──
 └── 🗂️ frontend/              # Web interface
-    ├── 📄 index.html         # Main page
-    ├── 🗂️ css/
+    ├── 📄 index.html         # Main page (with config loading)
+    ├── � audio-debug.html   # Audio debugging tool
+    ├── �🗂️ css/
     │   └── 📄 style.css      # Styling
     └── 🗂️ js/
-        ├── 📄 audio-player.js # Web Audio API
-        ├── 📄 websocket.js   # WebSocket client
-        └── 📄 ui-fixed.js    # UI controller
+        ├── 📄 config.js      # Configuration loader (NEW)
+        ├── 📄 audio-player.js # Web Audio API (enhanced debugging)
+        ├── 📄 websocket.js   # WebSocket client (config-aware)
+        └── 📄 ui-fixed.js    # UI controller (with history)
 ```
 
 ## ⚡ Key Features
@@ -158,28 +208,104 @@ reload = True              # Development mode
 
 ## 🐛 Troubleshooting
 
+### Recent Fixes Applied
+
+**Send Button Issues** ✅ FIXED:
+
+- Send button now properly enables/disables based on connection and input
+- Button updates in real-time as you type
+
+**Audio Indicator Issues** ✅ FIXED:
+
+- Audio indicators now correctly show "Playing audio..." → "Audio complete"
+- Status updates when audio finishes playing
+
+**Chat History Issues** ✅ FIXED:
+
+- Messages are now saved automatically in localStorage
+- Chat history persists between browser sessions
+- Configurable via `SAVE_CHAT_HISTORY` in `.env`
+
+**Configuration Issues** ✅ FIXED:
+
+- All important settings moved to `.env` file
+- Frontend loads configuration from `/config` endpoint
+- No more hardcoded values in JavaScript
+
 ### Common Issues
 
 **"Connection failed"**:
+
 - Check if server is running on port 8000
 - Try restarting the backend server
 - Check firewall settings
+- Verify WebSocket URL in `.env` configuration
 
 **"No audio"**:
-- Click anywhere to initialize audio context
+
+- **MOST IMPORTANT**: Click anywhere on the page first to enable audio
 - Check browser audio permissions
 - Verify audio device is connected
 - Try refreshing the page
+- Test with the debug page: `/static/audio-debug.html`
+
+**"Send button disabled"**:
+
+- Ensure WebSocket connection is established (click "Connect")
+- Type some text in the input field
+- Check browser console for JavaScript errors
 
 **"Models not loading"**:
+
 - Ensure stable internet connection
 - Check available disk space (5GB+ recommended)
 - Try: `pip install --upgrade transformers TTS`
+- Check Python environment is activated
 
 **"Slow responses"**:
-- Reduce `max_new_tokens` in LLM settings
+
+- Reduce `MAX_NEW_TOKENS` in `.env` file
 - Close other applications using GPU/CPU
 - Consider using smaller model variants
+- Check server logs for performance warnings
+
+**"Audio indicator stuck"**:
+
+- This issue has been fixed in v1.1.0
+- Refresh the page to get the latest code
+- Check browser console for any remaining errors
+
+### Debugging Tools
+
+**Backend Debugging**:
+
+```bash
+# Test WebSocket directly
+python test_websocket.py
+
+# Check server logs
+python backend/main.py  # Watch console output
+
+# Test individual components
+python demo.py
+```
+
+**Frontend Debugging**:
+
+- **Audio Debug Page**: Visit `/static/audio-debug.html`
+- **Browser Console**: Press F12 → Console tab
+- **Network Tab**: Check WebSocket connection status
+- **Application Tab**: Check localStorage for chat history
+
+**Configuration Check**:
+
+```bash
+# Verify config endpoint
+curl http://localhost:8000/config
+
+# Check environment variables
+cat .env
+```
 
 ### Getting Help
 

@@ -4,27 +4,58 @@
 
 SpeakStream is a real-time streaming chatbot that combines text generation with speech synthesis for immediate audio feedback. The system uses a modern web architecture with WebSocket communication for low-latency streaming.
 
+## ✨ Version 1.1.0 - Production Release
+
+### Major Fixes & Comprehensive Improvements
+
+#### Configuration System Overhaul
+
+- **Environment Variables**: All settings moved to `.env` file with complete coverage
+- **Runtime Configuration**: Added `/config` API endpoint for dynamic frontend configuration
+- **Dynamic Loading**: Frontend automatically adapts to backend configuration
+- **No Hardcoded Values**: Eliminated all hardcoded settings throughout the application
+
+#### UI/UX Production Ready
+- **Send Button**: Fully functional with proper state management (connected + input validation)
+- **Audio Indicator**: Accurate "Playing audio..." → "Audio complete" state transitions
+- **Chat History**: Persistent conversation history with localStorage and configurable limits
+- **Error Handling**: Comprehensive error messages and graceful failure recovery
+
+#### Audio System Production Grade
+- **Audio Context Management**: Robust initialization with user interaction requirements
+- **Debug Tools**: Complete audio diagnostics at `/static/audio-debug.html`
+- **Enhanced Logging**: Detailed audio processing logs for production debugging
+- **Error Recovery**: Comprehensive error handling throughout the audio pipeline
+- **WebSocket Testing**: Dedicated test tools for backend validation
+
 ### System Components
 
 #### Backend (FastAPI + WebSocket)
-- **FastAPI Server**: Handles HTTP requests and WebSocket connections
-- **LLM Handler**: Manages SmolLM2-135M-Instruct for text generation
-- **TTS Handler**: Manages Coqui TTS for speech synthesis
-- **Chat Handler**: Orchestrates communication between LLM and TTS
-- **WebSocket Manager**: Handles real-time bidirectional communication
+- **FastAPI Server**: Handles HTTP requests, WebSocket connections, and configuration API
+- **LLM Handler**: Manages SmolLM2-135M-Instruct with environment-configurable parameters
+- **TTS Handler**: Manages Coqui TTS with configurable audio settings
+- **Chat Handler**: Orchestrates communication between LLM and TTS with improved streaming
+- **Configuration Manager**: Serves frontend configuration from environment variables
 
-#### Frontend (Vanilla JavaScript)
-- **Audio Player**: Web Audio API integration for low-latency playback
-- **WebSocket Client**: Manages server communication
-- **UI Controller**: Handles user interactions and display
-- **Real-time Message Display**: Progressive text and audio rendering
+#### Frontend (Vanilla JavaScript + Configuration)
+- **Configuration Loader**: Fetches settings from backend `/config` endpoint
+- **Audio Player**: Web Audio API integration with enhanced debugging and error handling
+- **WebSocket Client**: Manages server communication with auto-reconnect
+- **UI Controller**: Handles user interactions, chat history, and display updates
+- **Chat History Manager**: Persistent localStorage-based conversation history
 
 ### Data Flow
 
-```
+```text
 User Input → WebSocket → LLM Streaming → Text Chunking → TTS Synthesis → Audio Streaming → Web Audio API → Speaker Output
+                ↓                                                                ↑
+    Configuration ← /config API ← Backend Settings (.env)                       │
+                ↓                                                               │
+    Chat History ← localStorage ← UI Controller ← Audio State Changes ─────────┘
                 ↓
     Real-time Text Display ← Text Chunks ← WebSocket ← Backend Processing
+                ↓
+    Audio Debugging ← /static/audio-debug.html ← Audio Processing Logs
 ```
 
 ## Key Technical Decisions
