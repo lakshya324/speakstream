@@ -22,5 +22,6 @@ echo "🔍 Checking model availability..."
 
 # Start the backend server
 echo "🖥️ Starting FastAPI backend server..."
+echo "🔄 Auto-reload is enabled - edit .env to change configuration on-the-fly!"
 cd backend
 python main.py

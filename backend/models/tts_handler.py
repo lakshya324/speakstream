@@ -5,12 +5,12 @@ import asyncio
 import logging
 import base64
 import io
-import os
 import numpy as np
 import soundfile as sf
 from TTS.api import TTS
 import torch
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Dict, Any
+from utils.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -20,18 +20,48 @@ class TTSHandler:
     def __init__(self):
         self.tts = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model_name = os.getenv("TTS_MODEL_NAME", "tts_models/en/ljspeech/glow-tts")
-        self.sample_rate = int(os.getenv("TTS_SAMPLE_RATE", "22050"))
-        self.chunk_size = int(os.getenv("CHUNK_SIZE", "1024"))
+        self.model_name = None
+        self.sample_rate = None
+        self.chunk_size = None
+        self.speaker = None
+        self.is_initialized = False
+        
+        # Initialize configuration from config manager
+        self.update_config(config_manager.get_all())
+        
+        # Register for configuration updates
+        config_manager.add_reload_callback(self.on_config_reload)
+    def update_config(self, config: Dict[str, Any]):
+        """Update configuration settings"""
+        self.model_name = config.get("TTS_MODEL_NAME", "tts_models/en/ljspeech/glow-tts")
+        self.sample_rate = config.get("TTS_SAMPLE_RATE", 22050)
+        self.chunk_size = config.get("CHUNK_SIZE", 1024)
+        self.speaker = config.get("TTS_SPEAKER", None)
+        
+        logger.info(f"🔄 TTS config updated - Model: {self.model_name}, Sample Rate: {self.sample_rate}, Chunk Size: {self.chunk_size}, Speaker: {self.speaker}")
+    
+    async def on_config_reload(self, config: Dict[str, Any]):
+        """Handle configuration reload"""
+        old_model_name = self.model_name
+        old_sample_rate = self.sample_rate
+        self.update_config(config)
+        
+        # If model name or sample rate changed, we need to reinitialize
+        if (old_model_name != self.model_name or old_sample_rate != self.sample_rate) and self.is_initialized:
+            logger.info(f"🔄 TTS model or settings changed, reinitializing...")
+            await self.initialize()
+        else:
+            logger.info("🔄 TTS settings updated without model reload")
         
     async def initialize(self):
         """Initialize the TTS model"""
-        logger.info(f"🔧 Loading TTS model {self.model_name} on {self.device}...")
+        logger.info(f"\033[36m🔧 Loading TTS model {self.model_name} on {self.device}...\033[0m")
         
         try:
             # Initialize TTS with the glow-tts model
             self.tts = TTS(model_name=self.model_name).to(self.device)
             logger.info(f"✅ TTS model loaded successfully on {self.device}")
+            self.is_initialized = True
             
         except Exception as e:
             logger.error(f"❌ Failed to load TTS model: {e}")
@@ -40,16 +70,36 @@ class TTSHandler:
     def audio_to_base64(self, audio_array: np.ndarray) -> str:
         """Convert audio array to base64 encoded WAV"""
         try:
+            # Ensure we have a valid audio array
+            if audio_array is None or len(audio_array) == 0:
+                logger.warning("⚠️ Empty audio array, generating silent audio")
+                audio_array = np.zeros(int(self.sample_rate * 0.1), dtype=np.float32)
+            
+            # Ensure proper shape (1D array)
+            if len(audio_array.shape) > 1:
+                audio_array = audio_array.squeeze()
+            
+            # Ensure proper data type
+            if audio_array.dtype != np.float32:
+                audio_array = audio_array.astype(np.float32)
+            
+            # Ensure proper range [-1, 1]
+            if np.max(np.abs(audio_array)) > 1.0:
+                audio_array = audio_array / np.max(np.abs(audio_array))
+            
+            logger.info(f"🎵 Converting audio to WAV: {len(audio_array)} samples at {self.sample_rate}Hz")
+            
             # Create an in-memory bytes buffer
             buffer = io.BytesIO()
             
-            # Write audio as WAV to buffer
-            sf.write(buffer, audio_array, self.sample_rate, format='WAV')
+            # Write audio as WAV to buffer with proper parameters
+            sf.write(buffer, audio_array, self.sample_rate, format='WAV', subtype='PCM_16')
             
             # Get bytes and encode as base64
             audio_bytes = buffer.getvalue()
             base64_audio = base64.b64encode(audio_bytes).decode('utf-8')
             
+            logger.info(f"✅ Audio converted: {len(audio_bytes)} bytes -> {len(base64_audio)} chars base64")
             return base64_audio
             
         except Exception as e:
@@ -66,12 +116,47 @@ class TTSHandler:
             
             # Run TTS synthesis in executor to avoid blocking
             loop = asyncio.get_event_loop()
-            
             def _synthesize():
-                # Generate audio array
-                wav = self.tts.tts(text=text.strip())
-                return np.array(wav)
-            
+                try:
+                    # For VCTK model, we need to specify a speaker
+                    if "vctk" in self.model_name.lower():
+                        if self.speaker:
+                            logger.info(f"🎤 Using VCTK speaker: {self.speaker}")
+                            wav = self.tts.tts(text=text.strip(), speaker=self.speaker)
+                        else:
+                            # Default to a common VCTK speaker if none specified
+                            default_speaker = "p273"
+                            logger.info(f"🎤 Using default VCTK speaker: {default_speaker}")
+                            wav = self.tts.tts(text=text.strip(), speaker=default_speaker)
+                    else:
+                        # For other models, try with speaker if available, otherwise without
+                        if self.speaker and hasattr(self.tts, 'speakers') and self.tts.speakers:
+                            wav = self.tts.tts(text=text.strip(), speaker=self.speaker)
+                        else:
+                            wav = self.tts.tts(text=text.strip())
+                    
+                    # Ensure we get a numpy array
+                    if isinstance(wav, list):
+                        wav = np.array(wav)
+                    elif not isinstance(wav, np.ndarray):
+                        wav = np.array(wav)
+                    
+                    # Ensure proper data type and range
+                    if wav.dtype != np.float32:
+                        wav = wav.astype(np.float32)
+                    
+                    # Normalize audio if needed
+                    if np.max(np.abs(wav)) > 1.0:
+                        wav = wav / np.max(np.abs(wav))
+                    
+                    logger.info(f"🎵 Generated audio: shape={wav.shape}, dtype={wav.dtype}, range=[{wav.min():.3f}, {wav.max():.3f}]")
+                    return wav
+                    
+                except Exception as e:
+                    logger.error(f"❌ TTS synthesis error: {e}")
+                    # Return silent audio as fallback
+                    return np.zeros(int(self.sample_rate * 0.5), dtype=np.float32)
+
             # Run synthesis in thread pool
             audio_array = await loop.run_in_executor(None, _synthesize)
             

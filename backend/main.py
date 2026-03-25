@@ -10,11 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 import uvicorn
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-
+from utils.config_manager import config_manager
 from models.llm_handler import LLMHandler
 from models.tts_handler import TTSHandler
 from websocket.chat_handler import ChatHandler
@@ -36,6 +33,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting SpeakStream backend...")
     
+    # Start configuration file watcher
+    config_manager.start_watching()
+    
     # Initialize LLM handler
     logger.info("📚 Loading SmolLM2-135M-Instruct model...")
     llm_handler = LLMHandler()
@@ -55,6 +55,7 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("🛑 Shutting down SpeakStream backend...")
+    config_manager.stop_watching()
 
 # Initialize FastAPI app with lifespan
 app = FastAPI(title="SpeakStream", version="1.0.0", lifespan=lifespan)
@@ -95,22 +96,24 @@ async def health_check():
 @app.get("/config")
 async def get_config():
     """Get frontend configuration from environment variables"""
-    # Build WebSocket URL from environment
-    ws_protocol = os.getenv("WS_PROTOCOL", "ws")
-    ws_host = os.getenv("WS_HOST", "localhost")
-    ws_port = os.getenv("WS_PORT", os.getenv("PORT", "8000"))
+    config = config_manager.get_all()
+    
+    # Build WebSocket URL from configuration
+    ws_protocol = config.get("WS_PROTOCOL", "ws")
+    ws_host = config.get("WS_HOST", "localhost")
+    ws_port = config.get("WS_PORT", config.get("PORT", 8000))
     ws_url = f"{ws_protocol}://{ws_host}:{ws_port}/ws"
     
     return {
         "websocket_url": ws_url,
-        "default_volume": float(os.getenv("DEFAULT_VOLUME", "0.8")),
-        "auto_scroll": os.getenv("AUTO_SCROLL", "true").lower() == "true",
-        "save_chat_history": os.getenv("SAVE_CHAT_HISTORY", "true").lower() == "true",
-        "max_chat_history": int(os.getenv("MAX_CHAT_HISTORY", "100")),
-        "chunk_size": int(os.getenv("CHUNK_SIZE", "1024")),
-        "max_queue_size": int(os.getenv("MAX_QUEUE_SIZE", "10")),
-        "enable_audio": os.getenv("ENABLE_AUDIO", "true").lower() == "true",
-        "audio_buffer_size": int(os.getenv("AUDIO_BUFFER_SIZE", "8192"))
+        "default_volume": config.get("DEFAULT_VOLUME", 0.8),
+        "auto_scroll": config.get("AUTO_SCROLL", True),
+        "save_chat_history": config.get("SAVE_CHAT_HISTORY", True),
+        "max_chat_history": config.get("MAX_CHAT_HISTORY", 100),
+        "chunk_size": config.get("CHUNK_SIZE", 1024),
+        "max_queue_size": config.get("MAX_QUEUE_SIZE", 10),
+        "enable_audio": config.get("ENABLE_AUDIO", True),
+        "audio_buffer_size": config.get("AUDIO_BUFFER_SIZE", 8192)
     }
 
 # Serve static files
@@ -140,9 +143,10 @@ async def get_frontend():
     return {"message": "SpeakStream API is running! Frontend not found."}
 
 if __name__ == "__main__":
-    host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "8000"))
-    debug = os.getenv("DEBUG", "true").lower() == "true"
+    config = config_manager.get_all()
+    host = config.get("HOST", "0.0.0.0")
+    port = config.get("PORT", 8000)
+    debug = config.get("DEBUG", True)
     
     uvicorn.run(
         "main:app",

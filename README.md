@@ -9,12 +9,14 @@ A web-based chatbot that processes user input using a small, efficient language 
 - ✅ **Fully functional UI** - Send button, audio indicators, and chat history all working
 - ✅ **Robust audio system** - Progressive playback with comprehensive debugging tools
 - ✅ **Environment configuration** - Complete configuration via `.env` file
+- ✅ **Auto-reload configuration** - 🆕 Automatic reloading when `.env` file changes
 - ✅ **Persistent chat history** - Session restoration with localStorage
 - ✅ **Comprehensive debugging** - Audio diagnostics and WebSocket testing tools
 
-### �️ Technical Improvements
+### ⚙️ Technical Improvements
 
 - 📁 **Configuration API** - `/config` endpoint for dynamic frontend configuration
+- 🔄 **Auto-reload system** - 🆕 File watcher automatically reloads configuration changes
 - 🎵 **Audio debugging** - Dedicated debug page at `/static/audio-debug.html`
 - 🔧 **Enhanced logging** - Detailed debugging throughout the audio pipeline
 - 🌐 **WebSocket reliability** - Auto-reconnect and improved error handling
@@ -24,10 +26,11 @@ A web-based chatbot that processes user input using a small, efficient language 
 
 - **Real-time Text Generation**: Uses HuggingFace SmolLM2-135M-Instruct for efficient text generation
 - **Progressive Speech Synthesis**: Converts text chunks to audio using Coqui TTS (glow-tts model)
-- **Streaming Audio Playback**: Streams audio to frontend for smooth, real-time playback
+- **Streaming Audio Playback**: Streams audio to frontend for smooth, real-time playbook
 - **Asynchronous Backend**: FastAPI-based backend with WebSocket support
 - **Web Audio API**: Low-latency audio playback in the browser
 - **Environment Configuration**: All settings configurable via `.env` file
+- **🆕 Auto-reload Configuration**: Automatically updates when `.env` file changes
 - **Chat History**: Persistent conversation history with localStorage
 
 ## Architecture
@@ -88,7 +91,29 @@ Backend (FastAPI)
 
 ## 🔧 Configuration Options
 
-All settings are now configurable via the `.env` file:
+All settings are now configurable via the `.env` file. **🆕 Changes are automatically reloaded** - no need to restart the application!
+
+### 🔄 Auto-Reload Feature
+
+When you modify the `.env` file, the application automatically:
+
+- ✅ **Reloads configuration** - Updates all settings instantly
+- ✅ **Updates generation parameters** - Temperature, max tokens, etc.
+- ✅ **Refreshes audio settings** - Sample rate, chunk size, volume
+- ✅ **Reinitializes models** - If model names change (requires brief pause)
+- ✅ **Notifies in logs** - Shows what changed and when
+
+### Testing Auto-Reload
+
+Try the demonstration script to see auto-reload in action:
+
+```bash
+python demo_config_reload.py
+```
+
+Then edit the `.env` file and watch the changes appear in real-time!
+
+### Configuration Parameters
 
 ```bash
 # Server Settings
@@ -99,6 +124,9 @@ DEBUG=true
 # Model Settings  
 LLM_MODEL_NAME=HuggingFaceTB/SmolLM2-135M-Instruct
 TTS_MODEL_NAME=tts_models/en/ljspeech/glow-tts
+# For VCTK model, specify a speaker:
+# TTS_MODEL_NAME=tts_models/en/vctk/vits
+# TTS_SPEAKER=p273
 TTS_SAMPLE_RATE=22050
 
 # Audio Settings
@@ -118,6 +146,29 @@ TEMPERATURE=0.7
 TOP_P=0.9
 DO_SAMPLE=true
 ```
+
+### 🎙️ TTS Model Options
+
+#### ljspeech/glow-tts (Default)
+- **Quality**: Good, clear single voice
+- **Speed**: Fast synthesis
+- **Setup**: No additional configuration needed
+- **Use case**: Single speaker applications
+
+#### vctk/vits (Multi-speaker)
+- **Quality**: Excellent, multiple voice options  
+- **Speed**: Slightly slower than glow-tts
+- **Setup**: Requires `TTS_SPEAKER` setting
+- **Available speakers**: ED, p225, p226, p227, p228, p229, p230, etc. (109 total)
+- **Use case**: When you want voice variety or specific speaker characteristics
+
+#### Configuration Example for VCTK:
+```bash
+TTS_MODEL_NAME=tts_models/en/vctk/vits
+TTS_SPEAKER=p273  # Choose from available speakers
+```
+
+Run `python check_vctk_speakers.py` to see all available speakers.
 
 ## Technical Details
 
